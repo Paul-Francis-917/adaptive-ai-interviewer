@@ -1,90 +1,146 @@
 import os
 import json
 import google.generativeai as genai
-from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import Dict, Any
 
-from app.prompts.prompts import SYSTEM_PROMPT, FIRST_QUESTION_PROMPT, EVALUATION_AND_NEXT_PROMPT
+# Ensure you have GEMINI_API_KEY set in your environment
+api_key = os.getenv("GEMINI_API_KEY", "AQ.Ab8RN6ID1lWMix2QneTFaJ5ThBiznaCBV9FCkeMjpHPNcuU93Q")
+if api_key:
+    genai.configure(api_key=api_key)
 
-class LLMOutput(BaseModel):
-    accuracy: str = Field(description="strong | partial | weak")
-    strengths: List[str] = Field(description="Specific strengths demonstrated")
-    missing_concepts: List[str] = Field(description="Missing concepts")
-    misconceptions: List[str] = Field(description="Misconceptions")
-    next_action: str = Field(description="FOLLOW_UP | GO_DEEPER | SIMPLIFY | CHANGE_TOPIC")
-    reason_short: str = Field(description="One sentence for logs, not chain-of-thought")
-    next_question: str = Field(description="The actual next question to ask the candidate")
+# We'll use a model that supports structured JSON output.
+MODEL_NAME = "gemini-1.5-flash"
 
-# Initialize Gemini if key exists
-API_KEY = os.getenv("GEMINI_API_KEY")
-if API_KEY:
-    genai.configure(api_key=API_KEY)
-
-def generate_first_question(candidate_summary: dict, day_data: dict) -> str:
-    if not API_KEY:
-        return f"Welcome! Let's start with {day_data.get('title')}. Can you explain the basics?"
-        
-    model = genai.GenerativeModel('gemini-1.5-pro', system_instruction=SYSTEM_PROMPT)
-    prompt = FIRST_QUESTION_PROMPT.format(
-        candidate_name=candidate_summary.get("name"),
-        job_role=candidate_summary.get("jobRole"),
-        experience=candidate_summary.get("yearsExperience"),
-        day_title=day_data.get("title"),
-        objectives=", ".join(day_data.get("objectives", []))
-    )
-    
-    response = model.generate_content(prompt)
-    return response.text.strip()
-
-def evaluate_and_generate_next(
-    candidate_summary: dict, 
-    day_data: dict, 
-    previous_question: str, 
+def evaluate_answer_and_generate_next(
+    candidate_summary: str,
+    current_day: Dict[str, Any],
+    difficulty: str,
+    previous_question: str,
     candidate_answer: str,
-    coverage_status: str
-) -> LLMOutput:
-    if not API_KEY:
-        return LLMOutput(
-            accuracy="partial",
-            strengths=["Answered in mock mode"],
-            missing_concepts=["Mock missing concept"],
-            misconceptions=[],
-            next_action="CHANGE_TOPIC",
-            reason_short="Mocking next action",
-            next_question="This is a mock follow-up question."
-        )
-        
-    model = genai.GenerativeModel('gemini-1.5-pro', system_instruction=SYSTEM_PROMPT)
+    short_history: str,
+    allowed_next_actions: str
+) -> Dict[str, Any]:
+    """
+    Calls the LLM to evaluate the answer, decide the next action, and generate the next question.
+    """
+    if not api_key:
+        # Fallback for testing without API key
+        return {
+            "accuracy": "partial",
+            "strengths": ["Attempted to answer"],
+            "missing_concepts": ["Missing depth"],
+            "misconceptions": [],
+            "next_action": "FOLLOW_UP",
+            "reason_short": "Mock evaluation fallback",
+            "next_question": f"Can you explain more about {current_day.get('title')}?"
+        }
+
+    prompt = f"""
+    You are a professional technical interviewer.
+    Candidate Summary: {candidate_summary}
+    Topic Day: {current_day.get('title')}
+    Topic Objectives: {json.dumps(current_day.get('objectives', []))}
+    Current Difficulty: {difficulty}
     
-    prompt = EVALUATION_AND_NEXT_PROMPT.format(
-        candidate_name=candidate_summary.get("name"),
-        job_role=candidate_summary.get("jobRole"),
-        day_title=day_data.get("title"),
-        objectives=", ".join(day_data.get("objectives", [])),
-        previous_question=previous_question,
-        candidate_answer=candidate_answer,
-        coverage_status=coverage_status
-    )
+    Previous Question: {previous_question}
+    Candidate Answer: {candidate_answer}
     
-    response = model.generate_content(
-        prompt,
-        generation_config=genai.GenerationConfig(
-            response_mime_type="application/json",
-            response_schema=LLMOutput
-        )
-    )
+    Interview History:
+    {short_history}
+    
+    Allowed Next Actions: {allowed_next_actions}
+    
+    Evaluate the candidate's answer and decide the next action. Then generate the next question.
+    Return ONLY a valid JSON object matching this exact schema:
+    {{
+      "accuracy": "strong | partial | weak",
+      "strengths": ["..."],
+      "missing_concepts": ["..."],
+      "misconceptions": ["..."],
+      "next_action": "one of the Allowed Next Actions",
+      "reason_short": "one sentence explaining the decision",
+      "next_question": "the actual next question to ask the candidate"
+    }}
+    """
     
     try:
-        data = json.loads(response.text)
-        return LLMOutput(**data)
-    except Exception as e:
-        # Fallback in case of parse error
-        return LLMOutput(
-            accuracy="partial",
-            strengths=[],
-            missing_concepts=[],
-            misconceptions=[],
-            next_action="CHANGE_TOPIC",
-            reason_short=str(e),
-            next_question="I didn't quite catch that. Could you explain it differently?"
+        model = genai.GenerativeModel(MODEL_NAME)
+        # Using response_mime_type to enforce JSON from Gemini 1.5
+        response = model.generate_content(
+            prompt,
+            generation_config=genai.GenerationConfig(
+                response_mime_type="application/json",
+            )
         )
+        return json.loads(response.text)
+    except Exception as e:
+        print(f"LLM Error: {e}")
+        # Safe fallback
+        return {
+            "accuracy": "partial",
+            "strengths": [],
+            "missing_concepts": [],
+            "misconceptions": [],
+            "next_action": "CHANGE_TOPIC",
+            "reason_short": "Error connecting to LLM",
+            "next_question": "Let's move on to the next topic."
+        }
+
+def generate_first_question(day: Dict[str, Any]) -> str:
+    if not api_key:
+        return f"To start, can you explain what you learned about {day.get('title')}?"
+        
+    prompt = f"""
+    You are a professional technical interviewer.
+    Start the interview by asking a fundamental question about the following topic.
+    Topic: {day.get('title')}
+    Objectives: {json.dumps(day.get('objectives', []))}
+    
+    Return ONLY the question text.
+    """
+    try:
+        model = genai.GenerativeModel(MODEL_NAME)
+        response = model.generate_content(prompt)
+        return response.text.strip()
+    except Exception as e:
+        return f"Let's begin by discussing {day.get('title')}. What can you tell me about it?"
+
+def generate_final_feedback(history: str) -> Dict[str, Any]:
+    """Generates the final summary, strengths, gaps, and next steps."""
+    if not api_key:
+        return {
+            "summary": "Interview completed successfully.",
+            "strengths": ["Completed the interview"],
+            "gaps": ["No detailed gaps analyzed due to offline mode"],
+            "next": ["Review the curriculum again"]
+        }
+        
+    prompt = f"""
+    Based on the following interview history, generate a final feedback report.
+    History:
+    {history}
+    
+    Return ONLY a valid JSON object matching this schema:
+    {{
+      "summary": "2-4 sentences describing overall interview performance",
+      "strengths": ["Specific demonstrated strength 1", "..."],
+      "gaps": ["Specific missing concept 1", "..."],
+      "next": ["Concrete next step tied back to curriculum days"]
+    }}
+    """
+    try:
+        model = genai.GenerativeModel(MODEL_NAME)
+        response = model.generate_content(
+            prompt,
+            generation_config=genai.GenerationConfig(
+                response_mime_type="application/json",
+            )
+        )
+        return json.loads(response.text)
+    except Exception as e:
+        return {
+            "summary": "Error generating feedback.",
+            "strengths": [],
+            "gaps": [],
+            "next": []
+        }
