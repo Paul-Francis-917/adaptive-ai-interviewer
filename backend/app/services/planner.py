@@ -23,12 +23,12 @@ def build_interview_plan(candidate_profile: Dict[str, Any], curriculum_by_day: D
     
     # Fallback: if they haven't passed enough, we might need to dip into skipped or just use what we have,
     # but the synthetic candidates typically have enough passed missions.
-    if len(selected_days) < 4:
+    if len(selected_days) < 3:
         # Just use whatever they passed
         pass
     
-    # Designate the first 4 (or all if < 4) as mandatory anchors
-    anchor_days = selected_days[:4]
+    # Designate the first 3 (or all if < 3) as mandatory anchors
+    anchor_days = selected_days[:3]
     
     return {
         "planned_days": selected_days,

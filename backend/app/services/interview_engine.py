@@ -7,18 +7,18 @@ from app.services.curriculum_service import CURRICULUM_BY_DAY
 
 def check_coverage_guard(session: Dict[str, Any]) -> str:
     """
-    Ensures we don't finish before 8 questions and 4 distinct days.
+    Ensures we don't finish before 12 questions and 3 distinct days.
     Returns the next forced action if coverage is at risk.
     """
     question_count = session["question_count"]
     days_covered = len(session["days_covered"])
     
-    can_finish = (question_count >= 8) and (days_covered >= 4)
+    can_finish = (question_count >= 12) and (days_covered >= 3)
     if can_finish:
         return "CAN_FINISH"
         
-    remaining_questions = 8 - question_count
-    days_needed = 4 - days_covered
+    remaining_questions = 12 - question_count
+    days_needed = 3 - days_covered
     
     # If we have just enough questions left to cover the required days, force a topic change
     if remaining_questions <= days_needed:
@@ -96,7 +96,7 @@ def process_turn(session_id: str, candidate_answer: str) -> Dict[str, Any]:
         update_session(session_id, {"current_day": next_day})
     
     # Check if we can finish now that we processed this turn
-    if check_coverage_guard(session) == "CAN_FINISH" and session["question_count"] >= 8:
+    if check_coverage_guard(session) == "CAN_FINISH" and session["question_count"] >= 12:
         # Generate feedback
         full_history_str = json.dumps([
             {"day": h["day"], "Q": h["question"], "A": h["answer"], "eval": h["evaluation_summary"]} 

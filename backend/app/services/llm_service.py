@@ -24,33 +24,67 @@ def evaluate_answer_and_generate_next(
     Calls the LLM to evaluate the answer, decide the next action, and generate the next question.
     """
     if not api_key:
+        import random
         # Fallback for testing without API key
+        try:
+            history = json.loads(short_history)
+            turn_number = len(history)
+        except:
+            turn_number = 0
+            
+        mock_actions = ["FOLLOW_UP", "FOLLOW_UP", "GO_DEEPER", "CHANGE_TOPIC"]
+        mock_action = mock_actions[turn_number % len(mock_actions)]
+        
+        topic_title = current_day.get('title')
+        # Extract just the job title from "Role: Senior Data Engineer"
+        job_role = candidate_summary.replace("Role: ", "")
+        
+        if mock_action == "CHANGE_TOPIC":
+            next_q = random.choice([
+                f"That makes sense. Let's shift gears. As a {job_role}, how would you approach the next topic?",
+                f"Good answer. Let's move on to the next subject now. How does a {job_role} handle...",
+                f"I understand your point. Let's explore a completely different area now."
+            ])
+        elif mock_action == "GO_DEEPER":
+            next_q = random.choice([
+                f"Interesting. How would you apply the concepts of {topic_title} in a real production environment as a {job_role}?",
+                f"Can you elaborate on the potential challenges a {job_role} might face when deploying {topic_title} at scale?",
+                f"That's a good summary. What are the engineering trade-offs when implementing {topic_title} on your team?"
+            ])
+        else:
+            next_q = random.choice([
+                f"Can you explain a bit more about how {topic_title} works under the hood from a {job_role}'s perspective?",
+                f"Could you dive a little deeper into the technical details of {topic_title}?",
+                f"What specifically makes {topic_title} so important for a {job_role} in this architecture?"
+            ])
+            
         return {
             "accuracy": "partial",
             "strengths": ["Attempted to answer"],
             "missing_concepts": ["Missing depth"],
             "misconceptions": [],
-            "next_action": "FOLLOW_UP",
+            "next_action": mock_action,
             "reason_short": "Mock evaluation fallback",
-            "next_question": f"Can you explain more about {current_day.get('title')}?"
+            "next_question": next_q
         }
 
+    current_day_title = current_day.get('title')
+    current_day_objectives = json.dumps(current_day.get('objectives', []))
+
     prompt = f"""
-    You are a professional technical interviewer.
+    You are a professional technical interviewer for the ABTalks AI Cohort.
     Candidate Summary: {candidate_summary}
-    Topic Day: {current_day.get('title')}
-    Topic Objectives: {json.dumps(current_day.get('objectives', []))}
-    Current Difficulty: {difficulty}
-    
+    Topic Day: {current_day_title}
+    Topic Objectives: {current_day_objectives}
+
     Previous Question: {previous_question}
     Candidate Answer: {candidate_answer}
-    
-    Interview History:
-    {short_history}
-    
+    Interview History: {short_history}
     Allowed Next Actions: {allowed_next_actions}
-    
+
     Evaluate the candidate's answer and decide the next action. Then generate the next question.
+    CRITICAL: You MUST tailor your generated question specifically to the candidate's job role ({candidate_summary}). For example, if they are a Data Engineer, ask how they would build data pipelines for this topic.
+    Ground your questions STRICTLY in the supplied curriculum day and objectives.
     Return ONLY a valid JSON object matching this exact schema:
     {{
       "accuracy": "strong | partial | weak",
@@ -59,7 +93,7 @@ def evaluate_answer_and_generate_next(
       "misconceptions": ["..."],
       "next_action": "one of the Allowed Next Actions",
       "reason_short": "one sentence explaining the decision",
-      "next_question": "the actual next question to ask the candidate"
+      "next_question": "the actual next question to ask the candidate, tailored to their Job Role"
     }}
     """
     
