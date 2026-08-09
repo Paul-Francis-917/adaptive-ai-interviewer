@@ -1,32 +1,35 @@
 import json
 import os
-from pathlib import Path
+from typing import Dict, Any
 
-# Load curriculum once at module level to keep it in memory
-_curriculum_by_day = {}
+# Adjust path based on where the app runs from
+DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data")
+CURRICULUM_PATH = os.path.join(DATA_DIR, "curriculum.json")
 
-def load_curriculum():
-    global _curriculum_by_day
-    data_path = Path(__file__).parent.parent.parent / "data" / "curriculum.json"
-    if not data_path.exists():
-        # Fallback empty or default for testing if not found
-        _curriculum_by_day = {}
-        return
-        
-    with open(data_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-        for day in data:
-            _curriculum_by_day[day["day"]] = day
+def load_curriculum(file_path: str = CURRICULUM_PATH) -> Dict[str, Any]:
+    """
+    Loads the curriculum JSON and builds a lookup dictionary
+    keyed by the day number.
+    """
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            
+        curriculum_by_day = {}
+        for module in data.get("modules", []):
+            for day in module.get("days", []):
+                day_num = str(day.get("day"))
+                curriculum_by_day[day_num] = {
+                    "title": day.get("title", ""),
+                    "type": day.get("type", ""),
+                    "tools": day.get("tools", []),
+                    "objectives": day.get("objectives", []),
+                    "module": module.get("module_title", "")
+                }
+        return curriculum_by_day
+    except Exception as e:
+        print(f"Error loading curriculum from {file_path}: {e}")
+        return {}
 
-def get_day(day_number: int) -> dict:
-    if not _curriculum_by_day:
-        load_curriculum()
-    return _curriculum_by_day.get(day_number)
-
-def get_all_days() -> list:
-    if not _curriculum_by_day:
-        load_curriculum()
-    return list(_curriculum_by_day.values())
-
-# Initialize on import
-load_curriculum()
+# Load on startup to keep it in memory
+CURRICULUM_BY_DAY = load_curriculum()
