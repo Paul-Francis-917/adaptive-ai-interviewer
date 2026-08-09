@@ -4,8 +4,8 @@ import google.generativeai as genai
 from typing import Dict, Any
 
 # Ensure you have GEMINI_API_KEY set in your environment
-api_key = os.getenv("GEMINI_API_KEY", "AQ.Ab8RN6ID1lWMix2QneTFaJ5ThBiznaCBV9FCkeMjpHPNcuU93Q")
-if api_key:
+api_key = os.getenv("GEMINI_API_KEY")
+if api_key and api_key != "your-key-here":
     genai.configure(api_key=api_key)
 
 # We'll use a model that supports structured JSON output.

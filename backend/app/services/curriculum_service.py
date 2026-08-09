@@ -16,16 +16,14 @@ def load_curriculum(file_path: str = CURRICULUM_PATH) -> Dict[str, Any]:
             data = json.load(f)
             
         curriculum_by_day = {}
-        for module in data.get("modules", []):
-            for day in module.get("days", []):
-                day_num = str(day.get("day"))
-                curriculum_by_day[day_num] = {
-                    "title": day.get("title", ""),
-                    "type": day.get("type", ""),
-                    "tools": day.get("tools", []),
-                    "objectives": day.get("objectives", []),
-                    "module": module.get("module_title", "")
-                }
+        for day in data.get("days", []):
+            day_num = str(day.get("day"))
+            curriculum_by_day[day_num] = {
+                "title": day.get("title", ""),
+                "type": day.get("type", ""),
+                "tools": day.get("tools", []),
+                "objectives": day.get("objectives", [])
+            }
         return curriculum_by_day
     except Exception as e:
         print(f"Error loading curriculum from {file_path}: {e}")

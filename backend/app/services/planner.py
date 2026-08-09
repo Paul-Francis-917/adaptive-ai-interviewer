@@ -9,7 +9,7 @@ def build_interview_plan(candidate_profile: Dict[str, Any], curriculum_by_day: D
     passed_missions = candidate_profile.get("passed_missions", [])
     
     # Extract just the day strings that the candidate actually passed
-    passed_days = [m["day"] for m in passed_missions]
+    passed_days = [str(m["day"]) for m in passed_missions]
     
     # Filter days that exist in curriculum
     eligible_days = [day for day in passed_days if day in curriculum_by_day]
