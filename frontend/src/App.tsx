@@ -35,7 +35,8 @@ const MOCK_CANDIDATES = [
   }
 ];
 
-const API_BASE = "http://localhost:8000/api";
+// Hardcoded for hackathon production deployment to guarantee connection
+const API_BASE = "https://adaptive-ai-interviewer-5zxh.onrender.com/api";
 
 function App() {
   const [screen, setScreen] = useState<'LANDING' | 'START' | 'CHAT' | 'FEEDBACK'>('LANDING');
